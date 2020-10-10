@@ -10,6 +10,8 @@ From there, a handful of 1 line functions produce extensive output for further a
 *   plot_numeric_categorical_pairs()- Violin/box plots for the top n combinations of numeric features and categortical features
 *   plot_pca()- Pricipal Components Analysis of the numeric features with plotted variance exlained
 
+See example_notebook.ipynb for usage...
+
 
 ### Future Enhancements:
 - regression
