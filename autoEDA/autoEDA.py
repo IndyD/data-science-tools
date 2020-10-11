@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import matplotlib.style as style
 import scipy.stats as stats
 import seaborn as sns
-style.use('bmh') ## style for charts
+import warnings
 
 from pandas.plotting import scatter_matrix
 from sklearn.decomposition import PCA
@@ -15,7 +15,11 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
 from sklearn.impute import SimpleImputer
 
+import warnings
 
+
+warnings.filterwarnings('ignore')
+style.use('bmh') ## style for charts
 
 class ClassificationEDA:
     """
@@ -174,7 +178,7 @@ class ClassificationEDA:
         return cat_pairs
     
     
-    def plot_overlayed_barchart(self, field, verbose=False):
+    def plot_overlaid_barchart(self, field, verbose=False):
         ### Charts the counts of caterogical feats with % of binary response overlaid
         field_count  = self.df[field].value_counts()
         field_count_df = field_count.to_frame()
@@ -221,7 +225,7 @@ class ClassificationEDA:
         
         plt.figure(figsize=(10, 6*feat_count))
         for feat in self._ranked_categorical_feats[0:feat_count]:
-            self.plot_overlayed_barchart(feat, verbose)
+            self.plot_overlaid_barchart(feat, verbose)
             
             
     def plot_numeric(self, max_plots=150, bins=25, log_transform=False):
@@ -234,7 +238,7 @@ class ClassificationEDA:
 
         fig, axes = plt.subplots(feat_count,figsize=(10, 6*feat_count))
 
-        for i, feat in enumerate(self._ranked_numeric_feats[]):
+        for i, feat in enumerate(self._ranked_numeric_feats[0:feat_count]):
             feat_name = feat
             if log_transform:
                 if min(plot_df[feat]) >= 0:
@@ -290,32 +294,40 @@ class ClassificationEDA:
             axes[i].set_title(title)
             
 
-    def plot_numeric_categorical_pairs(self, max_plots=40, box_only=False):
+    def plot_numeric_categorical_pairs(self, max_plots=40, boxplot_only=False, log_transform=False):
         if len(self.categorical_features) == 0: raise ValueError('Need at least 1 categorical feature')
         if len(self.numeric_features) == 0: raise ValueError('Need at least 1 numeric features')
             
+        plot_df = self.df.copy()
         num_cat_pairs = self._get_best_numeric_categorical_pairs(max_plots)
         
-        f, axes = plt.subplots(len(num_cat_pairs),figsize=(10, 6*len(num_cat_pairs)))
+        fig, axes = plt.subplots(len(num_cat_pairs),figsize=(10, 6*len(num_cat_pairs)))
         for i, pair in enumerate(num_cat_pairs):
+            num_feat_name = pair[0]
+            if log_transform:
+                if min(plot_df[num_feat_name]) >= 0:
+                    plot_df[num_feat_name] = np.log10(plot_df[num_feat_name] + 1)
+                    num_feat_name = 'log_{f}'.format(f=num_feat_name)
+
+            title = '{c} vs {n}'.format(c=pair[1], n=num_feat_name)
             category_count = len(self.df[pair[1]].value_counts())
 
-            if category_count <= 15 and not box_only:
+            if category_count <= 15 and not boxplot_only:
                 sns.violinplot(
                     x=pair[1], 
                     y=pair[0], 
                     hue=self.target, 
-                    data=self.df, 
+                    data=plot_df, 
                     split=True, 
                     inner='quart', 
                     ax=axes[i]
                 )
-                axes[i].set_title('{c} vs {n}'.format(c=pair[1],n=pair[0]))
                 axes[i].set_xticklabels(axes[i].get_xticklabels(), rotation=45, horizontalalignment='right')
             else:
-                sns.boxplot(x=pair[1], y=pair[0], hue=self.target, data=self.df, ax=axes[i])
-                axes[i].set_xticklabels(axes[i].get_xticklabels(), rotation=45, horizontalalignment='right')
-                axes[i].set_title('{c} vs {n}'.format(c=pair[1],n=pair[0]))
+                sns.boxplot(x=pair[1], y=pair[0], hue=self.target, data=plot_df, ax=axes[i])
+
+            axes[i].set_xticklabels(axes[i].get_xticklabels(), rotation=45, horizontalalignment='right')
+            axes[i].set_title(title)
                 
 
     def plot_categorical_heatmaps(self, max_plots=50):

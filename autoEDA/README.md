@@ -11,13 +11,12 @@ From there, a handful of 1 line functions produce extensive output for further a
 *   plot_pca()- Pricipal Components Analysis of the numeric features with plotted variance exlained
 
 See example_notebook.ipynb for usage...
-
+Note: The fuctions have passable arguments, but they are not yet documented. Most functions have a 'max_plots' argument.
 
 ### Future Enhancements:
 - regression
 - muticlass
 - smart toggle log of numericals (maybe if sd > mean * n)
-- expand log transforms to all numeric charts
 - optional exclude list
 - optional list of features to plot exclusivly
 - allow lists to be passed to log_transform attributes
