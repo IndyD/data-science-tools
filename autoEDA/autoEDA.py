@@ -249,8 +249,6 @@ class ClassificationEDA:
 
         merged_filed_target_pct = field_target_pct.merge(field_count_df, right_index=True, left_on=field)
         field_target_data = merged_filed_target_pct.sort_values('count', ascending=False).reset_index(drop=True)
-        field_target_data.sort_values('count', ascending=False).reset_index(drop=True)
-        
         if verbose: print(field_target_data)
 
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -258,7 +256,8 @@ class ClassificationEDA:
         ax = sns.barplot(
             field_target_data[field], 
             field_target_data['count'], 
-            alpha=0.8
+            alpha=0.8,
+            order = field_target_data.sort_values('count', ascending=False)[field]
         )
         ax.set_xticklabels(ax.get_xticklabels(), rotation=45, horizontalalignment='right')
         ax.set_ylabel('count (bars)')
