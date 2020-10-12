@@ -11,15 +11,15 @@ From there, a handful of 1 line functions produce extensive output for further a
 *   plot_pca()- Pricipal Components Analysis of the numeric features with plotted variance exlained
 
 See example_notebook.ipynb for usage...
-Note: The fuctions have passable arguments, but they are not yet documented. Most functions have a 'max_plots' argument.
+
+### Note: 
+Most optional parameters for the functions are shown in example_notebook.ipynb, but not all are documented
 
 ### Future Enhancements:
 - regression
 - muticlass
 - smart toggle log of numericals (maybe if sd > mean * n)
-- optional exclude list
-- optional list of features to plot exclusivly
-- allow lists to be passed to log_transform attributes
 - smart annotate heat and corr maps depening on size
-- warn about max plot issue 
-- get around max plot issue (exclusion list is workaround)
+- add col restrictions to pca and corr_heatmap
+- add warnings about cols given not in the df
+- add ability to slice off part of the data (remove outliers)

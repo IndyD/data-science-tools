@@ -18,6 +18,7 @@ from sklearn.impute import SimpleImputer
 
 import warnings
 
+import pdb
 
 warnings.filterwarnings('ignore')
 style.use('bmh') ## style for charts
@@ -57,19 +58,20 @@ class ClassificationEDA:
         categorical_cols = categorical_cols[categorical_cols != target]
         
         self.target = target
-        self.numeric_cols = numeric_cols
-        self.categorical_cols = categorical_cols
+        self.numeric_cols = set(numeric_cols[numeric_cols != target])
+        self.categorical_cols = set(categorical_cols[categorical_cols != target])
+        self.combined_cols = self.numeric_cols.union(self.categorical_cols)
+        self.all_cols = self.combined_cols.union([target])
         self.max_categories = max_categories if max_categories is not None else DEFAULT_MAX_CATEGORIES
-        self.df = self._clean_df(df)
+        self.df = self._df_bin_max_categories(df)
         self._ranked_numeric_cols = self._rank_numeric_cols()
         self._ranked_categorical_cols = self._rank_categorical_cols()
         self._bar_lineplot_reference = None
                 
-    def _clean_df(self, df):
+    def _df_bin_max_categories(self, df):
         df[self.target] = pd.get_dummies(df[self.target], drop_first=True)
         
-        all_cols = np.concatenate([self.numeric_cols,self.categorical_cols,[self.target]])
-        df = df[all_cols] #remove any non-numeric, non-categorical fields (ie dates)
+        df = df[self.all_cols] #remove any non-numeric, non-categorical fields (ie dates)
         for col in self.categorical_cols:
             df[col].fillna("Unknown", inplace = True)
             top_categories = df[col].value_counts().nlargest(self.max_categories-1).index
@@ -106,26 +108,28 @@ class ClassificationEDA:
         
         return ranked_categorical_cols
     
-
     def _validate_min_numeric_cols(self, cols, min_cols):
-        numeric_count = len(set(cols).intersection(self.numeric_cols))
+        if cols is False: 
+            numeric_count = len(self.numeric_cols)
+        else:
+            numeric_count = len(set(cols).intersection(self.numeric_cols))
         if numeric_count < min_cols:
             raise ValueError("Need at least {n} numeric columns".format(n=min_cols))
 
     def _validate_min_categorical_cols(self, cols, min_cols):
-        categorical_count = len(set(cols).intersection(self.categorical_cols))
+        if cols is False: 
+            categorical_count = len(self.categorical_cols)
+        else:
+            categorical_count = len(set(cols).intersection(self.categorical_cols))
         if categorical_count < min_cols:
             raise ValueError("Need at least {n} categorical columns".format(n=min_cols)) 
 
-
-
-    def _get_best_numeric_cols(self, cols, max_plots=40):
+    def _get_best_numeric_cols(self, cols, max_plots):
         self._validate_min_numeric_cols(cols, min_cols=1)
         ranked_plot_cols = [col for col in self._ranked_numeric_cols if col in cols]
         max_plots = max_plots if max_plots < len(ranked_plot_cols) else len(ranked_plot_cols)
 
         return ranked_plot_cols[0:max_plots]
-
 
     def _get_best_categorical_cols(self, cols, max_plots):
         self._validate_min_categorical_cols(cols, min_cols=1)
@@ -134,30 +138,21 @@ class ClassificationEDA:
 
         return ranked_plot_cols[0:max_plots]
 
-
-    def _get_best_col_pairs(self, col_type, max_plots=40):
+    def _get_best_col_pairs(self, ranked_cols, max_plots):
         # find how many cols are needed to satisfy the max scatter plot parameter
         n=2; m=1;
         while m < max_plots:
             m += n
             n += 1 
 
-        if col_type == 'numeric':
-            ranked_cols = self._ranked_numeric_cols 
-        elif col_type == 'categorical':
-            ranked_cols == self._ranked_categorical_cols 
-        else:
-            raise ValueError('Invalid col type')
-
         # if there aren't too many numerical proceed with using them all
         if len(ranked_cols) < n: n = len(ranked_cols)
-
         plot_cols = ranked_cols[0:n]
         weakest_col = plot_cols[n-1]
 
         # get all possible pairs 
         col_pairs = list(itertools.combinations(plot_cols, 2))
-
+        # remove the excess using the weakest column
         while len(col_pairs) > max_plots:
             i = 0
             for col_pair in col_pairs:
@@ -168,22 +163,32 @@ class ClassificationEDA:
 
         return col_pairs  
 
-    def _get_best_numeric_pairs(self, max_plots):
-        return self._get_best_col_pairs('numeric', max_plots)  
+    def _get_best_numeric_pairs(self, cols, max_plots):
+        self._validate_min_numeric_cols(cols, min_cols=2)
+        ranked_cols = [col for col in self._ranked_numeric_cols if col in cols]
+        return self._get_best_col_pairs(ranked_cols, max_plots)  
 
-    def _get_categorical_best_pairs(self, max_plots):
-        return self._get_best_col_pairs('categorical', max_plots)   
+    def _get_best_categorical_pairs(self, cols, max_plots):
+        self._validate_min_categorical_cols(cols, min_cols=2)
+        ranked_cols = [col for col in self._ranked_categorical_cols if col in cols]
+        return self._get_best_col_pairs(ranked_cols, max_plots)   
     
-    def _get_best_numeric_categorical_pairs(self, max_plots=40):
-        ### Find best pairs of numeric and categorical cols based on correlation and logistic regression score
-        num_categoricals = math.ceil(math.sqrt(max_plots))
-        if num_categoricals > len(self.categorical_cols): num_categoricals = len(self.categorical_cols) 
-        
-        num_numeric = math.ceil(max_plots/num_categoricals)
-        if num_numeric > len(self.numeric_cols): num_numeric = len(self.numeric_cols) 
+    def _get_best_numeric_categorical_pairs(self, cols, max_plots):
+        print(cols)
+        self._validate_min_categorical_cols(cols, min_cols=1)
+        self._validate_min_numeric_cols(cols, min_cols=1)
+        ranked_categorical_cols = [col for col in self._ranked_categorical_cols if col in cols]
+        ranked_numeric_cols = [col for col in self._ranked_numeric_cols if col in cols]
 
-        categorical_pair_cols = self._ranked_categorical_cols[0:num_categoricals]
-        numeric_pair_cols = self._ranked_numeric_cols[0:num_numeric]        
+        ### Find best pairs of numeric and categorical cols based on correlation and logistic regression score
+        ## try to get an somewhat even spit, preferring categorical
+        num_categoricals = math.ceil(math.sqrt(max_plots))
+        if num_categoricals > len(ranked_categorical_cols): num_categoricals = len(ranked_categorical_cols) 
+        num_numeric = math.ceil(max_plots/num_categoricals)
+        if num_numeric > len(ranked_numeric_cols): num_numeric = len(ranked_numeric_cols) 
+
+        categorical_pair_cols = ranked_categorical_cols[0:num_categoricals]
+        numeric_pair_cols = ranked_numeric_cols[0:num_numeric]        
         weakest_numeric_col = numeric_pair_cols[num_numeric-1]
 
         categorical_numeric_pairs = [pair for pair in itertools.product(numeric_pair_cols, categorical_pair_cols)]
@@ -197,22 +202,25 @@ class ClassificationEDA:
             categorical_numeric_pairs.pop(i)
 
         return categorical_numeric_pairs
-            
+        
 
-    
-    
-    def _log_transform_df(self, df, log_transform):
-        # log log_transform is either True or a list af cols to log_transform
-        log_transform = self.numeric_cols if log_transform is True else log_transform
-
+    def _create_plot_df(self, plot_cols, log_transform):
+        plot_df = self.df.copy()
+        # wrap in DataFrame() to ensure single index doesn't become Series
+        plot_df = pd.DataFrame(plot_df[ list(plot_cols) + [self.target] ])
         logged_cols = []
-        for col in df:
-            if col in log_transform and col in self.numeric_cols and min(df[col]) >= 0:
-                # only positive values can be logged
-                df[col] = np.log10(df[col] + 1)
-                logged_cols.append(col)
 
-        return df, logged_cols
+        if log_transform: 
+            log_transform = self.numeric_cols if log_transform is True else log_transform
+
+            for col in plot_df:
+                if col in log_transform and col in self.numeric_cols and min(plot_df[col]) >= 0:
+                    # only positive values can be logged
+                    plot_df[col] = np.log10(plot_df[col] + 1)
+                    logged_cols.append(col)
+
+        return plot_df, logged_cols
+
 
     def _filter_cols_to_plot(self, possible_cols, specified_cols, exclude, filter_function, max_plots):
         if specified_cols: 
@@ -278,7 +286,7 @@ class ClassificationEDA:
         for col in plot_cols:
             self.plot_overlaid_barchart(col, verbose)
             
-            
+    
     def plot_numeric(self, cols=False, exclude=None, max_plots=150, bins=25, log_transform=False):
         plot_cols = self._filter_cols_to_plot(
             possible_cols = self.numeric_cols, 
@@ -288,87 +296,103 @@ class ClassificationEDA:
             max_plots = max_plots
         )
         self._validate_min_numeric_cols(plot_cols, min_cols=1)
-
-        plot_df = self.df.copy()
-        # ensure single index dosen't become Series
-        plot_df = pd.DataFrame(plot_df[ plot_cols + [self.target] ])
-        if log_transform: 
-            plot_df, logged_cols = self._log_transform_df(plot_df, log_transform)
+        plot_df, logged_cols = self._create_plot_df(plot_cols, log_transform)
 
         target_value0 = plot_df[self.target].value_counts().index[0]
         target_value1 = plot_df[self.target].value_counts().index[1]
 
-        fig, axes = plt.subplots(len(plot_cols),figsize=(10, 6*len(plot_cols)))
-        for i, col in enumerate(plot_cols):
+        for col in plot_cols:
             col_name = 'log_{c}'.format(c=col) if col in logged_cols else col
-            
+            fig, ax = plt.subplots(figsize=(10, 6))
+
             sns.distplot(
                 plot_df.loc[plot_df[self.target] == target_value0][col],
                 label=target_value0, 
                 bins = bins, 
-                ax=axes[i]
             )
             sns.distplot(
                 plot_df.loc[plot_df[self.target] != target_value0][col],
                 label=target_value1, 
                 bins = bins, 
-                ax=axes[i]
             )
-            axes[i].legend(loc='upper right')
-            axes[i].set_title('{c} histogram'.format(c=col_name))
+            ax.legend(loc='upper right')
+            ax.set_title('{c} histogram'.format(c=col_name))
     
-    
-    def plot_scatterplots(self, cols=False, alpha=0.6, log_transform=False, max_plots=40):
-        if len(self.numeric_cols) < 2: raise ValueError('Need at least 2 numeric cols for scatterplots')
-        if cols and not set(cols).issubset(set(self.numeric_cols)): raise ValueError("Invalid 'cols' argument")
-
-        scatter_pairs = self._get_numeric_best_pairs(max_plots=max_plots)
-        f, axes = plt.subplots(len(scatter_pairs),figsize=(10, 6*len(scatter_pairs)))
+    def plot_scatterplots(self, cols=False, exclude=None, alpha=0.6, log_transform=False, max_plots=40):
+        scatter_pairs = self._filter_cols_to_plot(
+            possible_cols = self.numeric_cols, 
+            specified_cols = cols, 
+            exclude = exclude, 
+            filter_function = self._get_best_numeric_pairs, 
+            max_plots = max_plots
+        )
+        plot_cols = set([col for pair in scatter_pairs for col in pair])
+        self._validate_min_numeric_cols(plot_cols, min_cols=2)
+        plot_df, logged_cols = self._create_plot_df(plot_cols, log_transform)
         
-        for i, pair in enumerate(scatter_pairs):
-            plot_df = self.df.copy()[[pair[0], pair[1], self.target]]
-            
-            logf0 = ''
-            logf1 = ''
-            
-            if log_transform:
-                if min(plot_df[pair[0]]) >= 0:
-                    plot_df[pair[0]] = np.log10(plot_df[pair[0]] + 1)
-                    logf0 = 'log_'
-                if min(plot_df[pair[1]]) >= 0:
-                    plot_df[pair[1]] = np.log10(plot_df[pair[1]] + 1)
-                    logf1 = 'log_'
-            title = '{p0}{f0} vs {p1}{f1}'.format(p0=logf0, f0=pair[0], p1=logf1, f1=pair[1])
+        for pair in scatter_pairs:
+            fig, ax = plt.subplots(figsize=(10, 6))
+            prefix0 = 'log_' if pair[0] in logged_cols else ''
+            prefix1 = 'log_' if pair[1] in logged_cols else ''
+            title = '{p0}{f0} vs {p1}{f1}'.format(p0=prefix0, f0=pair[0], p1=prefix1, f1=pair[1])
             
             sns.scatterplot(
                 data=plot_df, 
                 x=pair[0], 
                 y=pair[1], 
-                hue=self.df[self.target].tolist(), 
+                hue=plot_df[self.target].tolist(), 
                 alpha=alpha, 
-                ax=axes[i]
             )
-            axes[i].set_title(title)
-            
+            ax.set_title(title)
 
-    def plot_numeric_categorical_pairs(self, max_plots=40, boxplot_only=False, log_transform=False):
-        if len(self.categorical_cols) == 0: raise ValueError('Need at least 1 categorical col')
-        if len(self.numeric_cols) == 0: raise ValueError('Need at least 1 numeric cols')
-            
-        plot_df = self.df.copy()
-        num_cat_pairs = self._get_best_numeric_categorical_pairs(max_plots)
+
+    def plot_categorical_heatmaps(self, cols=False, exclude=None, max_plots=50, annot=False):
+        categorical_pairs = self._filter_cols_to_plot(
+            possible_cols = self.categorical_cols, 
+            specified_cols = cols, 
+            exclude = exclude, 
+            filter_function = self._get_best_categorical_pairs, 
+            max_plots = max_plots
+        )
+        plot_cols = set([col for pair in categorical_pairs for col in pair])
+        self._validate_min_categorical_cols(plot_cols, min_cols=2)
         
-        fig, axes = plt.subplots(len(num_cat_pairs),figsize=(10, 6*len(num_cat_pairs)))
-        for i, pair in enumerate(num_cat_pairs):
-            numeric_col_name = pair[0]
-            if log_transform:
-                if min(plot_df[numeric_col_name]) >= 0:
-                    plot_df[numeric_col_name] = np.log10(plot_df[numeric_col_name] + 1)
-                    numeric_col_name = 'log_{f}'.format(f=numeric_col_name)
+        for pair in categorical_pairs:
+            fig, ax = plt.subplots(figsize=(10, 6))
+            sns.heatmap(
+                pd.pivot_table(self.df,index=[pair[0]], values=self.target, columns=[pair[1]]),
+                annot=annot,
+            ) 
 
+
+    def plot_numeric_categorical_pairs(
+            self, 
+            cols=False, 
+            exclude=None, 
+            boxplot_only=False, 
+            log_transform=False,
+            max_plots=40
+        ):
+        self._validate_min_categorical_cols(cols, min_cols=1)
+        self._validate_min_numeric_cols(cols, min_cols=1)
+            
+        num_cat_pairs = self._filter_cols_to_plot(
+            possible_cols = self.combined_cols, 
+            specified_cols = cols, 
+            exclude = exclude, 
+            filter_function = self._get_best_numeric_categorical_pairs, 
+            max_plots = max_plots
+        )
+        plot_cols = set([col for pair in num_cat_pairs for col in pair])
+        plot_df, logged_cols = self._create_plot_df(plot_cols, log_transform)
+
+        
+        for pair in num_cat_pairs:
+            fig, ax = plt.subplots(figsize=(10, 6))
+            numeric_col_name = 'log_{c}'.format(c=pair[0]) if pair[0] in logged_cols else pair[0]
             title = '{c} vs {n}'.format(c=pair[1], n=numeric_col_name)
-            category_count = len(self.df[pair[1]].value_counts())
 
+            category_count = len(self.df[pair[1]].value_counts())
             if category_count <= 15 and not boxplot_only:
                 sns.violinplot(
                     x=pair[1], 
@@ -376,25 +400,16 @@ class ClassificationEDA:
                     hue=self.target, 
                     data=plot_df, 
                     split=True, 
-                    inner='quart', 
-                    ax=axes[i]
+                    inner='quart',
                 )
-                axes[i].set_xticklabels(axes[i].get_xticklabels(), rotation=45, horizontalalignment='right')
+                ax.set_xticklabels(ax.get_xticklabels(), rotation=45, horizontalalignment='right')
             else:
-                sns.boxplot(x=pair[1], y=pair[0], hue=self.target, data=plot_df, ax=axes[i])
+                sns.boxplot(x=pair[1], y=pair[0], hue=self.target, data=plot_df)
 
-            axes[i].set_xticklabels(axes[i].get_xticklabels(), rotation=45, horizontalalignment='right')
-            axes[i].set_title(title)
+            ax.set_xticklabels(ax.get_xticklabels(), rotation=45, horizontalalignment='right')
+            ax.set_title(title)
                 
 
-    def plot_categorical_heatmaps(self, max_plots=50):
-        if len(self.categorical_cols) < 2: raise ValueError('Need at least 2 categorical cols for heatmap')
-        categorical_pairs = self._get_categorical_best_pairs(max_plots)
-        
-        f, axes = plt.subplots(len(categorical_pairs),figsize=(10, 6*len(categorical_pairs)))
-        for i, pair in enumerate(categorical_pairs):
-            sns.heatmap(pd.pivot_table(self.df,index=[pair[0]], values=self.target, columns=[pair[1]]), ax=axes[i])
-            
     def plot_pca(self, output_components=None):
         ## Perform PCA and plot variability described the PCs
         if len(self.numeric_cols) < 2: raise ValueError('Need at least 2 numeric cols for PCA')
