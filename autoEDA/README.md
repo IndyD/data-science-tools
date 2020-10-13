@@ -18,8 +18,6 @@ Most optional parameters for the functions are shown in example_notebook.ipynb, 
 ### Future Enhancements:
 - regression
 - muticlass
-- smart toggle log of numericals (maybe if sd > mean * n)
 - smart annotate heat and corr maps depening on size
 - add col restrictions to pca and corr_heatmap
-- add warnings about cols given not in the df
 - add ability to slice off part of the data (remove outliers)
