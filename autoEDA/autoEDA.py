@@ -26,7 +26,7 @@ style.use('bmh') ## style for charts
 
 class autoEDA:
 
-    def __init__(self, df, target=None, max_categories=None):
+    def __init__(self, df, eda_type, target=None, max_categories=None):
         DEFAULT_MAX_CATEGORIES = 20
         max_categories = max_categories if max_categories is not None else DEFAULT_MAX_CATEGORIES
 
@@ -41,6 +41,7 @@ class autoEDA:
         
         self.df = df
         self.target = target
+        self.eda_type = eda_type
         self.numeric_cols = numeric_cols
         self.categorical_cols = categorical_cols
         self.combined_cols = combined_cols
@@ -131,6 +132,22 @@ class autoEDA:
             categorical_count = len(set(cols).intersection(self.categorical_cols))
         if categorical_count < min_cols:
             raise ValueError("Need at least {n} categorical columns".format(n=min_cols)) 
+
+
+    def _balance_df(self, df, target):
+        if self.eda_type == 'classification':
+            count_class_0, count_class_1 = df[target].value_counts()
+            class_0, class_1 = df[target].value_counts().index
+            max_sample = min(count_class_0, count_class_1)
+
+            df_class_0 = df[df[target] == class_0]
+            df_class_1 = df[df[target] == class_1]
+            df_class_0_under = df_class_0.sample(max_sample)
+            df_class_1_under = df_class_1.sample(max_sample)
+
+            df = pd.concat([df_class_0_under, df_class_1_under], axis=0)
+
+        return df
 
     def _get_best_numeric_cols(self, cols, max_plots):
         """ Find top n ranked numeric columns in cols list (n=max_plots)"""
@@ -345,6 +362,8 @@ class autoEDA:
         plot_cols = set([col for pair in numeric_pairs for col in pair])
         self._validate_min_numeric_cols(plot_cols, min_cols=2)
         plot_df, logged_cols = self._create_transformed_plot_df(plot_cols, log_transform)
+        if chart_params['balance'] is True: 
+            plot_df = self._balance_df(plot_df, self.target)
         
         for pair in numeric_pairs:
             self._plot_numeric_pair(
@@ -452,7 +471,7 @@ class autoEDA:
 
 class ClassificationEDA(autoEDA):
     def __init__(self, df, target=None, max_categories=None):
-        super().__init__(df, target, max_categories)
+        super().__init__(df=df, target=target, max_categories=max_categories, eda_type='classification')
 
     def _validate_input_target(self, df, target):
         if not isinstance(target, str): raise ValueError('Invalid target: {t}'.format(t=target))
@@ -657,14 +676,19 @@ class ClassificationEDA(autoEDA):
             exclude=None, 
             max_plots=150,
             log_transform=False,
-            alpha=0.6
+            alpha=0.6,
+            balance=False,
         ):
         if alpha is not None and not isinstance(alpha, float):
             log.error('Invalid bins parameter, must be float')
             alpha = 0.6
+        if balance is not False and balance is not True:
+            log.error('Invalid balance parameter, must be True/False')
+            balance=False
 
         chart_params = {}
         chart_params['alpha'] = alpha
+        chart_params['balance'] = balance
         self._param_plot_numeric_pairs(
             cols=cols, 
             exclude=exclude, 

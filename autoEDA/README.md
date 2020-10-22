@@ -21,3 +21,5 @@ Most optional parameters for the functions are shown in example_notebook.ipynb, 
 - smart annotate heat and corr maps depening on size
 - add col restrictions to pca and corr_heatmap
 - add ability to slice off part of the data (remove outliers)
+- fix categorical ranking if there are NaNs (add to pipeline)
+- add split column for categorical pairs
