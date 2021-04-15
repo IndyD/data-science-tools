@@ -46,9 +46,15 @@ class autoEDA:
         self.categorical_cols = categorical_cols
         self.combined_cols = combined_cols
         self.all_cols = all_cols
-        self.max_categories = max_categories 
-        self._ranked_numeric_cols = self._rank_numeric_cols(df, target, numeric_cols)
-        self._ranked_categorical_cols = self._rank_categorical_cols(df, target, categorical_cols)
+        self.max_categories = max_categories
+        try:
+            self._ranked_numeric_cols = self._rank_numeric_cols(df, target, numeric_cols)
+        except:
+            self._ranked_numeric_cols = numeric_cols
+        try:
+            self._ranked_categorical_cols = self._rank_categorical_cols(df, target, categorical_cols)
+        except:
+            self._ranked_categorical_cols = categorical_cols
         self._bar_lineplot_reference = None
 
     def _validate_input_df(self, df):
